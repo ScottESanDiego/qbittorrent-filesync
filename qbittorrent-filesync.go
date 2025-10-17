@@ -6,6 +6,7 @@ import (
 	"flag"
 	"sort"
 	"slices"
+	"path/filepath"
 	qbt "github.com/NullpointerW/go-qbittorrent-apiv2"
 )
 
@@ -42,7 +43,7 @@ func main() {
 	// Build a slice of torrent names from the list of torrents
 	var torrentnames  []string
 	for _, torrent := range torrents {
-		torrentnames = append(torrentnames, torrent.ContentPath[len(torrent.SavePath)+1:])
+		torrentnames = append(torrentnames, filepath.Base(torrent.ContentPath))
 	}
 
 	// Sort slice so that we can search it later
@@ -60,21 +61,20 @@ func main() {
 		if !found {
 			// Super-duper extra check that file.Name() isn't null since os.RemoveAll will remove filedir otherwise!
 			if len(file.Name()) > 0 {
-				if *dryrun == true {
-					fmt.Printf("Dry-run, not deleting: ")
+				filepath := filedir + file.Name()
+				if *dryrun {
+					fmt.Printf("Dry-run, not deleting: %s\n", filepath)
 				} else {
-					fmt.Printf("Deleting unowned file: ")
-					err := os.RemoveAll(filedir+file.Name())
+					fmt.Printf("Deleting unowned file: %s\n", filepath)
+					err := os.RemoveAll(filepath)
 					if err != nil {
-						fmt.Println(err)
-						return
+						fmt.Printf("ERROR deleting %s: %v\n", filepath, err)
+						continue
 					}
-			}
+				}
 			} else {
 				fmt.Println("ERROR: Filename was empty!")
 			}
-
-			fmt.Printf("%s\n", filedir+file.Name())
 		}
 	}
 }

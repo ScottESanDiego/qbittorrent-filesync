@@ -1,4 +1,4 @@
-github.com/NullpointerW/go-qbittorrent-apiv2 v0.0.16 h1:cMEbUaq8htIAnQJT4xzxeiRbAwGlukFwfSFg2ZLaQpo=
-github.com/NullpointerW/go-qbittorrent-apiv2 v0.0.16/go.mod h1:qhx64qXeKDgbCJQOE/eqaNKRjPi0GgTUJ6WA5D4CBoc=
-golang.org/x/net v0.9.0 h1:aWJ/m6xSmxWBx+V0XRHTlrYrPG56jKsLdTFmsSsCzOM=
-golang.org/x/net v0.9.0/go.mod h1:d48xBJpPfHeWQsugry2m+kC02ZBRGRgulfHnEXEuWns=
+github.com/NullpointerW/go-qbittorrent-apiv2 v0.0.17 h1:Jvz2wGx073oYYJmuyJYMTpQZ1/wYE/jNW1JRDZVqEpg=
+github.com/NullpointerW/go-qbittorrent-apiv2 v0.0.17/go.mod h1:qhx64qXeKDgbCJQOE/eqaNKRjPi0GgTUJ6WA5D4CBoc=
+golang.org/x/net v0.46.0 h1:giFlY12I07fugqwPuWJi68oOnpfqFnJIJzaIIm2JVV4=
+golang.org/x/net v0.46.0/go.mod h1:Q9BGdFy1y4nkUwiLvT5qtyhAnEHgnQ/zd8PfU6nc210=

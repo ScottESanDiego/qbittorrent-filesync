@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
-	"sort"
 
 	qbt "github.com/NullpointerW/go-qbittorrent-apiv2"
 )
@@ -25,6 +23,7 @@ func main() {
 	flag.StringVar(&password, "password", "", "Password for qBittorrent")
 	flag.StringVar(&filedir, "directory", "/var/torrents/", "Directory in the filesystem where the torrents live")
 	dryrun := flag.Bool("dryrun", false, "Don't actually delete files, just print what would happen")
+	verbose := flag.Bool("verbose", false, "Show detailed information about protected files")
 	flag.Parse()
 
 	// Clean and validate the directory path
@@ -48,14 +47,30 @@ func main() {
 		return
 	}
 
-	// Build a slice of torrent names from the list of torrents
-	var torrentnames []string
+	// Build a map of protected items (files/directories that qBittorrent is managing)
+	// Only include torrents that are actually saved in our target directory
+	protectedItems := make(map[string]bool)
+	targetDir := filepath.Clean(filedir)
+
 	for _, torrent := range torrents {
-		torrentnames = append(torrentnames, filepath.Base(torrent.ContentPath))
+		// Get the directory where this torrent is saved
+		torrentDir := filepath.Clean(filepath.Dir(torrent.ContentPath))
+
+		// Only protect items if the torrent is saved in our target directory
+		if torrentDir == targetDir {
+			itemName := filepath.Base(torrent.ContentPath)
+			protectedItems[itemName] = true
+
+			if *verbose {
+				fmt.Printf("Protecting: %s (torrent: %s)\n", itemName, torrent.Name)
+			}
+		}
 	}
 
-	// Sort slice so that we can search it later
-	sort.Strings(torrentnames)
+	if *verbose {
+		fmt.Printf("\nTotal protected items: %d\n", len(protectedItems))
+		fmt.Printf("Scanning directory: %s\n\n", filedir)
+	}
 
 	// Iterate over all files in a directory
 	files, err := os.ReadDir(filedir)
@@ -65,26 +80,33 @@ func main() {
 	}
 
 	for _, file := range files {
-		_, found := slices.BinarySearch(torrentnames, file.Name())
-		if !found {
-			// Construct the full path safely
-			targetPath := filepath.Join(filedir, file.Name())
+		fileName := file.Name()
 
-			// Verify the path is still within the target directory (prevents path traversal)
-			if !filepath.HasPrefix(targetPath, filedir) {
-				fmt.Printf("ERROR: Suspicious path detected: %s\n", targetPath)
-				continue
+		// Check if this item is protected by qBittorrent
+		if protectedItems[fileName] {
+			if *verbose {
+				fmt.Printf("Keeping (in use by qBittorrent): %s\n", fileName)
 			}
+			continue
+		}
 
-			if *dryrun {
-				fmt.Printf("Dry-run, not deleting: %s\n", targetPath)
-			} else {
-				fmt.Printf("Deleting unowned file: %s\n", targetPath)
-				err := os.RemoveAll(targetPath)
-				if err != nil {
-					fmt.Printf("ERROR deleting %s: %v\n", targetPath, err)
-					continue
-				}
+		// Not protected - this file/directory is not managed by qBittorrent
+		targetPath := filepath.Join(filedir, fileName)
+
+		// Verify the path is still within the target directory (prevents path traversal)
+		if !filepath.HasPrefix(targetPath, filedir) {
+			fmt.Printf("ERROR: Suspicious path detected: %s\n", targetPath)
+			continue
+		}
+
+		if *dryrun {
+			fmt.Printf("Would delete: %s\n", targetPath)
+		} else {
+			fmt.Printf("Deleting: %s\n", targetPath)
+			err := os.RemoveAll(targetPath)
+			if err != nil {
+				fmt.Printf("ERROR deleting %s: %v\n", targetPath, err)
+				continue
 			}
 		}
 	}

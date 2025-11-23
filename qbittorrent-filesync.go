@@ -16,21 +16,30 @@ func main() {
 	var username string // Username for qBittorrent
 	var password string // Password for qBittorrent
 	var filedir string  // Directory in the filesystem where the torrents live
+	var qbtdir string   // Directory path as qBittorrent sees it (for Docker/container path mapping)
 
 	flag.StringVar(&hostname, "hostname", "127.0.0.1", "IP or FQDN of the qBittorrent server")
 	flag.StringVar(&port, "port", "8080", "Port the qBittorrent Web API is running on")
 	flag.StringVar(&username, "username", "", "Username for qBittorrent")
 	flag.StringVar(&password, "password", "", "Password for qBittorrent")
 	flag.StringVar(&filedir, "directory", "/var/torrents/", "Directory in the filesystem where the torrents live")
+	flag.StringVar(&qbtdir, "qbt-path", "", "Directory path as qBittorrent sees it (leave empty if same as --directory)")
 	dryrun := flag.Bool("dryrun", false, "Don't actually delete files, just print what would happen")
 	verbose := flag.Bool("verbose", false, "Show detailed information about protected files")
 	flag.Parse()
 
-	// Clean and validate the directory path
+	// Clean and validate the directory paths
 	filedir = filepath.Clean(filedir)
 	if filedir == "." || filedir == "/" {
 		fmt.Println("ERROR: Invalid directory specified")
 		return
+	}
+
+	// If qbt-path is not specified, assume it's the same as the local directory
+	if qbtdir == "" {
+		qbtdir = filedir
+	} else {
+		qbtdir = filepath.Clean(qbtdir)
 	}
 
 	// Create a new qBitTorrent Web API client
@@ -50,26 +59,64 @@ func main() {
 	// Build a map of protected items (files/directories that qBittorrent is managing)
 	// Only include torrents that are actually saved in our target directory
 	protectedItems := make(map[string]bool)
-	targetDir := filepath.Clean(filedir)
+
+	if *verbose {
+		fmt.Printf("Local filesystem directory: %s\n", filedir)
+		fmt.Printf("qBittorrent's view of directory: %s\n", qbtdir)
+		fmt.Printf("Found %d completed torrents\n\n", len(torrents))
+	}
 
 	for _, torrent := range torrents {
-		// Get the directory where this torrent is saved
-		torrentDir := filepath.Clean(filepath.Dir(torrent.ContentPath))
+		// Get the directory where this torrent is saved (as qBittorrent sees it)
+		contentPath := filepath.Clean(torrent.ContentPath)
+		torrentDir := filepath.Dir(contentPath)
 
-		// Only protect items if the torrent is saved in our target directory
-		if torrentDir == targetDir {
-			itemName := filepath.Base(torrent.ContentPath)
-			protectedItems[itemName] = true
+		if *verbose {
+			fmt.Printf("Torrent: %s\n", torrent.Name)
+			fmt.Printf("  ContentPath: %s\n", contentPath)
+			fmt.Printf("  Parent Dir: %s\n", torrentDir)
+		}
 
+		var itemToProtect string
+
+		// Determine what filesystem item to protect
+		if torrentDir == qbtdir {
+			// Single-file torrent: file is directly in the target directory
+			// Protect the filename
+			itemToProtect = filepath.Base(contentPath)
 			if *verbose {
-				fmt.Printf("Protecting: %s (torrent: %s)\n", itemName, torrent.Name)
+				fmt.Printf("  Type: Single-file torrent\n")
+				fmt.Printf("  Protecting file: %s\n", itemToProtect)
 			}
+		} else if filepath.Dir(torrentDir) == qbtdir {
+			// Multi-file torrent: file is in a subdirectory of the target directory
+			// Protect the directory name
+			itemToProtect = filepath.Base(torrentDir)
+			if *verbose {
+				fmt.Printf("  Type: Multi-file torrent\n")
+				fmt.Printf("  Protecting directory: %s\n", itemToProtect)
+			}
+		} else {
+			// Torrent is not in our target directory
+			if *verbose {
+				fmt.Printf("  ✗ SKIPPING (not in target directory)\n")
+				fmt.Println()
+			}
+			continue
+		}
+
+		// Add to protected items
+		protectedItems[itemToProtect] = true
+
+		if *verbose {
+			fmt.Printf("  ✓ PROTECTED\n")
+			fmt.Println()
 		}
 	}
 
 	if *verbose {
-		fmt.Printf("\nTotal protected items: %d\n", len(protectedItems))
-		fmt.Printf("Scanning directory: %s\n\n", filedir)
+		fmt.Printf("\nTotal protected items in this directory: %d\n", len(protectedItems))
+		fmt.Printf("Now scanning filesystem at: %s\n\n", filedir)
 	}
 
 	// Iterate over all files in a directory
